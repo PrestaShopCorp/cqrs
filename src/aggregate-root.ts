@@ -1,13 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-empty-function */
-import { IEvent } from './interfaces';
+import { IEvent, IEventBus } from './interfaces';
 
 const INTERNAL_EVENTS = Symbol();
 const IS_AUTO_COMMIT_ENABLED = Symbol();
 
-export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
+export abstract class AggregateRoot<
+  EventBase extends IEvent = IEvent,
+  EventBusBase extends IEventBus<EventBase> = IEventBus<EventBase>
+> {
   public [IS_AUTO_COMMIT_ENABLED] = false;
   private readonly [INTERNAL_EVENTS]: EventBase[] = [];
+  private readonly _publishers: EventBusBase[];
 
   set autoCommit(value: boolean) {
     this[IS_AUTO_COMMIT_ENABLED] = value;
@@ -17,15 +19,32 @@ export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
     return this[IS_AUTO_COMMIT_ENABLED];
   }
 
-  publish<T extends EventBase = EventBase>(event: T) {}
+  addPublisher(subscriber: EventBusBase) {
+    this._publishers.push(subscriber);
+    return this;
+  }
 
-  commit() {
-    this[INTERNAL_EVENTS].forEach((event) => this.publish(event));
+  get publishers(): EventBusBase[] {
+    return this._publishers;
+  }
+
+  protected addEvent<T extends EventBase = EventBase>(event: T) {
+    this[INTERNAL_EVENTS].push(event);
+  }
+
+  protected clearEvents() {
     this[INTERNAL_EVENTS].length = 0;
   }
 
+  commit() {
+    this.publishers.forEach((publisher) =>
+      publisher.publishAll(this.getUncommittedEvents()),
+    );
+    this.clearEvents();
+  }
+
   uncommit() {
-    this[INTERNAL_EVENTS].length = 0;
+    this.clearEvents();
   }
 
   getUncommittedEvents(): EventBase[] {
@@ -37,11 +56,10 @@ export abstract class AggregateRoot<EventBase extends IEvent = IEvent> {
   }
 
   apply<T extends EventBase = EventBase>(event: T, isFromHistory = false) {
-    if (!isFromHistory && !this.autoCommit) {
-      this[INTERNAL_EVENTS].push(event);
+    if (!isFromHistory) {
+      this.addEvent(event);
     }
-    this.autoCommit && this.publish(event);
-
+    this.autoCommit && this.commit();
     const handler = this.getEventHandler(event);
     handler && handler.call(this, event);
   }
