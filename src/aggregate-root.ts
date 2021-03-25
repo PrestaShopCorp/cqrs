@@ -9,7 +9,7 @@ export abstract class AggregateRoot<
 > {
   public [IS_AUTO_COMMIT_ENABLED] = false;
   private readonly [INTERNAL_EVENTS]: EventBase[] = [];
-  private readonly _publishers: EventBusBase[];
+  private readonly _publishers: EventBusBase[] = [];
 
   set autoCommit(value: boolean) {
     this[IS_AUTO_COMMIT_ENABLED] = value;
@@ -19,8 +19,8 @@ export abstract class AggregateRoot<
     return this[IS_AUTO_COMMIT_ENABLED];
   }
 
-  addPublisher(subscriber: EventBusBase) {
-    this._publishers.push(subscriber);
+  addPublisher(publisher: EventBusBase) {
+    this._publishers.push(publisher);
     return this;
   }
 
@@ -30,10 +30,12 @@ export abstract class AggregateRoot<
 
   protected addEvent<T extends EventBase = EventBase>(event: T) {
     this[INTERNAL_EVENTS].push(event);
+    return this;
   }
 
   protected clearEvents() {
     this[INTERNAL_EVENTS].length = 0;
+    return this;
   }
 
   commit() {
@@ -41,10 +43,12 @@ export abstract class AggregateRoot<
       publisher.publishAll(this.getUncommittedEvents()),
     );
     this.clearEvents();
+    return this;
   }
 
   uncommit() {
     this.clearEvents();
+    return this;
   }
 
   getUncommittedEvents(): EventBase[] {
